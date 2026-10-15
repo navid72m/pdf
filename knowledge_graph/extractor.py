@@ -38,11 +38,11 @@ class EnhancedEntityExtractor:
             use_custom_rules: Whether to use custom extraction rules
             min_entity_confidence: Minimum confidence threshold for entities
         """
-        self.load_spacy(spacy_model)
         self.use_ner = use_ner
         self.use_noun_phrases = use_noun_phrases
         self.use_custom_rules = use_custom_rules
         self.min_entity_confidence = min_entity_confidence
+        self.load_spacy(spacy_model)
         
         # Initialize custom patterns
         self.custom_patterns = []
@@ -104,7 +104,8 @@ class EnhancedEntityExtractor:
         
         # Add patterns to the NLP pipeline
         if "entity_ruler" not in self.nlp.pipe_names:
-            ruler = self.nlp.add_pipe("entity_ruler", before="ner")
+            ruler = (self.nlp.add_pipe("entity_ruler", before="ner")
+                     if "ner" in self.nlp.pipe_names else self.nlp.add_pipe("entity_ruler"))
             ruler.add_patterns(patterns)
         else:
             ruler = self.nlp.get_pipe("entity_ruler")
@@ -141,7 +142,7 @@ class EnhancedEntityExtractor:
                     entities.append((ent.text, entity_type, confidence))
         
         # Extract noun phrases as concept entities
-        if self.use_noun_phrases:
+        if self.use_noun_phrases and "parser" in self.nlp.pipe_names:
             for chunk in doc.noun_chunks:
                 # Clean the noun phrase
                 name = chunk.text.strip()
@@ -360,7 +361,7 @@ class EnhancedRelationExtractor:
             relations.extend(pattern_relations)
         
         # Extract relations using dependency parsing
-        if self.use_dependency_parsing:
+        if self.use_dependency_parsing and "parser" in self.nlp.pipe_names:
             dependency_relations = self._extract_dependency_relations(text, entity_map)
             relations.extend(dependency_relations)
         
@@ -743,9 +744,8 @@ class EnhancedKnowledgeGraph:
         
         # Get outgoing relations
         if direction in ["outgoing", "both"]:
-            for _, target, edge_data in self.graph.out_edges(entity_id, data=True):
+            for _, target, relation_id, edge_data in self.graph.out_edges(entity_id, keys=True, data=True):
                 if relation_type is None or edge_data.get("type") == relation_type:
-                    relation_id = edge_data.get("key")
                     neighbors.append({
                         "entity": self.entities[target],
                         "relation": self.relations[relation_id],
@@ -754,9 +754,8 @@ class EnhancedKnowledgeGraph:
         
         # Get incoming relations
         if direction in ["incoming", "both"]:
-            for source, _, edge_data in self.graph.in_edges(entity_id, data=True):
+            for source, _, relation_id, edge_data in self.graph.in_edges(entity_id, keys=True, data=True):
                 if relation_type is None or edge_data.get("type") == relation_type:
-                    relation_id = edge_data.get("key")
                     neighbors.append({
                         "entity": self.entities[source],
                         "relation": self.relations[relation_id],
@@ -808,9 +807,9 @@ class EnhancedKnowledgeGraph:
                     
                     # Find the specific edge data
                     edge_key = None
-                    for _, _, key, edge_data in self.graph.edges(source, target, keys=True, data=True):
-                        edge_key = key
-                        break
+                    edges = self.graph.get_edge_data(source, target, default={})
+                    if edges:
+                        edge_key = max(edges, key=lambda key: self.relations[key]["confidence"])
                     
                     if edge_key:
                         result_path.append({
@@ -1172,15 +1171,11 @@ class EnhancedKnowledgeGraph:
         """
         entity_types = {}
         for entity in self.entities.values():
-            if entity.type not in entity_types:
-                entity_types[entity.type] = 0
-            entity_types[entity.type] += 1
+            entity_types[entity["type"]] = entity_types.get(entity["type"], 0) + 1
         
         relation_types = {}
         for relation in self.relations.values():
-            if relation.type not in relation_types:
-                relation_types[relation.type] = 0
-            relation_types[relation.type] += 1
+            relation_types[relation["type"]] = relation_types.get(relation["type"], 0) + 1
         
         return {
             "num_entities": len(self.entities),
@@ -1199,8 +1194,8 @@ class EnhancedKnowledgeGraph:
             Dictionary representation of the knowledge graph
         """
         return {
-            "entities": [vars(entity) for entity in self.entities.values()],
-            "relations": [vars(relation) for relation in self.relations.values()]
+            "entities": [dict(entity) for entity in self.entities.values()],
+            "relations": [dict(relation) for relation in self.relations.values()]
         }
     
 

@@ -1,29 +1,21 @@
-"""
-Knowledge graph module for enhanced document retrieval and querying.
-"""
+"""Knowledge graph components, imported lazily to keep integrations optional."""
 
-from .model import KnowledgeGraph, Entity, Relation
-from .extractor import KnowledgeGraphExtractor
-from .integration import KnowledgeGraphEnhancedRetrieval, RAGEnhancer
-from .query import KnowledgeGraphQueryProcessor
+from importlib import import_module
 
-# Import visualization functions if available
-try:
-    from .visualize import generate_html_visualization, get_graph_data, save_graph_data_json
-except ImportError:
-    # Visualization dependencies might not be available
-    pass
+_EXPORTS = {
+    "KnowledgeGraph": ".model", "Entity": ".model", "Relation": ".model",
+    "KnowledgeGraphExtractor": ".extractor", "EnhancedKnowledgeGraph": ".extractor",
+    "KnowledgeGraphEnhancedRetrieval": ".integration", "RAGEnhancer": ".integration",
+    "KnowledgeGraphQueryProcessor": ".query",
+    "generate_html_visualization": ".visualize", "get_graph_data": ".visualize",
+    "save_graph_data_json": ".visualize",
+}
+__all__ = list(_EXPORTS)
 
-__all__ = [
-    'KnowledgeGraph',
-    'Entity',
-    'Relation',
-    'KnowledgeGraphExtractor',
-    'KnowledgeGraphEnhancedRetrieval',
-    'RAGEnhancer',
-    'KnowledgeGraphQueryProcessor',
-]
 
-# Add visualization functions to __all__ if they were imported successfully
-if 'generate_html_visualization' in locals():
-    __all__.extend(['generate_html_visualization', 'get_graph_data', 'save_graph_data_json'])
+def __getattr__(name):
+    if name not in _EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(_EXPORTS[name], __name__), name)
+    globals()[name] = value
+    return value
