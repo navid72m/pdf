@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "document-rag-pipeline"
+version = "0.1.0"
+description = "Composable document retrieval and question answering with optional knowledge graphs"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.24", "python-dotenv>=0.20"]
+
+[project.optional-dependencies]
+rag = ["sentence-transformers>=2.2.2", "faiss-cpu"]
+documents = ["PyMuPDF>=1.18.20", "python-docx>=0.8.11"]
+graph = ["networkx>=2.5", "spacy>=3.0"]
+neo4j = ["neo4j>=5.0"]
+ui = ["streamlit>=1.22", "matplotlib>=3.4"]
+api = ["fastapi>=0.95", "uvicorn>=0.22", "python-multipart"]
+
+[tool.setuptools]
+py-modules = ["config"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rag*", "document*", "embedding*", "storage*", "llm*", "knowledge_graph*", "routes*", "ui*"]
+namespaces = true

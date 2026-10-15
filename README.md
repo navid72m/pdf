@@ -1,184 +1,150 @@
-# 📚 Document Embedding and Retrieval System
+# Document RAG Pipeline
 
-## 🌟 Overview
+A Python library for document ingestion, retrieval, and question answering. Compose a pipeline in a few lines, replace individual components, and optionally add knowledge graph retrieval.
 
-This advanced Retrieval-Augmented Generation (RAG) system is a sophisticated document processing and question-answering platform that leverages state-of-the-art natural language processing techniques. The system combines intelligent document extraction, semantic embedding, vector search, and generative AI to provide accurate and contextual responses to user queries.
+## Install
 
-## 🌐 Deployed Version
-
-Check out the live demo of the RAG Document QA System: [https://navidchatbot.streamlit.app/](https://navidchatbot.streamlit.app/)
-
-## 🏗️ System Architecture
-
-```mermaid
-flowchart TD
-    User(["User"]) <--> UI["Web Interface\n(Streamlit)"]
-    API(["External Systems"]) <--> APIServer["API Server\n(FastAPI)"]
-    
-    subgraph Core["RAG System Core"]
-        direction TB
-        RAGEngine["RAG Engine"] <--> DocProcessor["Document Processor"]
-        RAGEngine <--> VectorDB["Vector Database"]
-        RAGEngine <--> LLM["Language Models"]
-        RAGEngine <--> KG["Knowledge Graph"]
-    end
-    
-    UI <--> Core
-    APIServer <--> Core
-    
-    Documents[("Document\nCollection")] --> DocProcessor
-    
-    class RAGEngine,KG primary
-    class User,API,Documents secondary
-```
-
-The system employs a modular architecture combining vector search with knowledge graph capabilities:
-
-1. **Document Processor** intelligently extracts, chunks, and prepares documents for embedding
-2. **Vector Database** provides efficient similarity search using state-of-the-art indexing
-3. **Knowledge Graph** captures semantic relationships between document entities
-4. **RAG Engine** orchestrates the retrieval and generation process
-5. **Language Models** generate contextual responses based on retrieved information
-
-The system is accessible through both a **Streamlit web interface** for direct user interaction and a **FastAPI server** for programmatic integration with other applications.
-
-## 🚀 Key Features
-
-### 1. Intelligent Document Processing
-- Multi-format document support (PDF, DOCX, TXT, CSV, JSON)
-- Adaptive text chunking strategies
-- Metadata extraction
-- Configurable chunk sizes
-
-### 2. Advanced Embedding
-- Supports multiple embedding models
-- Sentence Transformers integration
-- HuggingFace Transformers compatibility
-- GPU and CPU support
-
-### 3. Semantic Search Capabilities
-- Vector database with multiple backends (FAISS, Keyword)
-- Hybrid search modes (semantic, keyword, hybrid)
-- Metadata-based filtering
-- Efficient similarity search
-
-### 4. Knowledge Graph Integration
-- Implicit knowledge graph creation through semantic embeddings
-- Relationship mapping between document chunks
-- Context-aware document retrieval
-- Enhanced reasoning capabilities
-
-### 5. Generative Question Answering
-- Multiple LLM backends (OpenAI, HuggingFace, Local)
-- Chain-of-Thought reasoning
-- Customizable prompt templates
-- Contextual response generation
-
-## 📦 Prerequisites
-
-- Python 3.8+
-- PyTorch
-- Sentence Transformers
-- Vector Database Libraries
-
-## 🔧 Installation
+Use Python 3.9 or newer. From the repository root:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/document-embedding-system.git
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+pip install -e '.[rag,documents]'
 ```
 
-## 🌈 Components
+The default embedding model downloads on first use. PDF and DOCX support comes from the `documents` extra; TXT and Markdown use Python's standard library.
 
-- **Document Processor**: Intelligent text extraction and chunking
-- **Embedding Model**: Convert text to semantic vectors
-- **Vector Database**: Efficient document storage and retrieval
-- **RAG Engine**: Combine retrieval and generation
-- **LLM Integration**: Multiple language model backends
-- **Knowledge Graph**: Enhance retrieval with entity relationships
-
-## 💡 Usage Example
+## Create a pipeline
 
 ```python
-# Initialize components
-from document.processor import DocumentProcessor
-from embedding.model import create_embedding_model
-from rag.engine import create_rag_engine
+from rag import RAGPipeline
 
-# Process documents
-processor = DocumentProcessor()
-chunks, metadata = processor.process_file('path/to/document.pdf')
-
-# Create RAG engine
-rag_engine = create_rag_engine()
-
-# Add documents
-rag_engine.add_documents(chunks, metadata)
-
-# Query documents
-response = rag_engine.generate_response("What are the key points?")
-print(response)
+rag = RAGPipeline()
+rag.add_file("document.pdf")
+result = rag.ask("What are the key points?")
+print(result["response"])
 ```
 
-## 🔬 Knowledge Graph Features
+Each pipeline owns its own document store. Defaults are SentenceTransformers embeddings, an in-memory FAISS index, and `LocalLLM`, an **extractive responder** that selects text from the retrieved chunks. Supply an LLM adapter for generative answers.
 
-The system creates an implicit knowledge graph through:
-- Semantic embeddings that capture document relationships
-- Context-aware document retrieval
-- Ability to map connections between document chunks
-- Reasoning that considers multiple document contexts
+Add text directly or supply chunks you have already prepared:
 
-## 🚧 Roadmap
+```python
+rag.add_text("Your document content...", metadata={"source": "notes"})
+rag.add_documents(
+    ["First prepared chunk", "Second prepared chunk"],
+    metadata=[{"topic": "design"}, {"topic": "operations"}],
+)
 
-- [ ] Add more document type support
-- [ ] Implement advanced semantic search
-- [ ] Create REST API interface
-- [ ] Add machine learning model fine-tuning
-- [ ] Enhance knowledge graph visualization
+sources = rag.search("How does it work?", top_k=3)
+result = rag.ask("Explain the design", filter_dict={"topic": "design"})
+```
 
-## 🤝 Contributing
+`ask()` returns a dictionary with `query`, `response`, `retrieved_documents`, and `knowledge_graph_used`. Each retrieved document contains `id`, `text`, `metadata`, and `score`. `count_documents()` counts chunks; `clear()` clears both vector and graph data.
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+## Optional knowledge graph
 
-## 📊 Supported Interfaces
+```bash
+pip install -e '.[rag,documents,graph]'
+python -m spacy download en_core_web_sm
+```
 
-- Streamlit Web App
-- FastAPI Backend
-- CLI Tools
-- Python Library
+```python
+from rag import RAGPipeline
 
-## 🛡️ Error Handling
+rag = RAGPipeline(knowledge_graph=True)
+rag.add_file("document.pdf")
+result = rag.ask("How are the main concepts related?")
+print(result["response"])
+print(rag.knowledge_graph.statistics())
+```
 
-- Robust error management
-- Comprehensive logging
-- Graceful failure mechanisms
+The extension extracts entities and relationships at ingestion. During search it retrieves candidates for the original query and a query expanded with related entities, then reranks candidates using graph connections. Answer generation uses the retrieved document text. Extraction is based on English spaCy parsing and rules; inferred relationships are heuristics.
 
-## 📜 License
+Standard pipelines do not import spaCy, NetworkX, Neo4j, or Streamlit. Graph extraction is opt-in. Install the spaCy model ahead of time; the existing extractor attempts a download when it cannot find the model.
 
-MIT License
+For control over extraction and ranking:
 
-## 📞 Contact
+```python
+from rag import RAGPipeline
+from rag.graph import KnowledgeGraphExtension
+from embedding.model import create_embedding_model
+from storage.vector_db import create_vector_database
+from knowledge_graph.extractor import KnowledgeGraphExtractor
 
-Navid Mirnouri - navid72m@gmail.com
+embedder = create_embedding_model()
+store = create_vector_database(dimension=embedder.dimension)
+graph = KnowledgeGraphExtension(
+    embedder, store,
+    extractor=KnowledgeGraphExtractor(min_entity_confidence=0.7),
+    graph_ranking_weight=0.3,
+)
+rag = RAGPipeline(embedder=embedder, store=store, knowledge_graph=graph)
+```
 
+## Replace components
 
-## 🔗 Quick Links
+The constructor accepts `embedder`, `store`, `llm`, `processor`, `retriever`, `knowledge_graph`, `top_k`, and `prompt_template`. Components use structural protocols in `rag.interfaces`; inheritance is unnecessary.
 
-- **Live Demo**: [https://navidchatbot.streamlit.app/](https://navidchatbot.streamlit.app/)
-- **Repository**: [GitHub Project](https://github.com/yourusername/document-embedding-system)
+| Component | Contract |
+| --- | --- |
+| Embedder | `dimension` property and `embed(text_or_texts)` returning one vector per input |
+| Store | `add_documents(documents)`, `search(embedding, top_k, filter_func)`, `count_documents()`, `clear()` |
+| LLM | `generate_response(prompt, max_tokens=512)` returning a string |
+| Processor | `process_file(path, metadata=...)` and `process_text(text, metadata=...)`, returning chunks and matching metadata |
+| Retriever | `search(query, top_k=5, filter_dict=None)` returning document dictionaries |
+| Graph extension | Retriever contract plus `add_documents(texts, metadata)` and `clear()` |
 
+For example, adapt an existing model client:
 
----
+```python
+from rag import RAGPipeline
 
-**Note**: Ensure you have appropriate computational resources for processing large document collections.
+class MyLLM:
+    def __init__(self, client):
+        self.client = client
+
+    def generate_response(self, prompt, max_tokens=512):
+        return self.client.complete(prompt=prompt, max_tokens=max_tokens)
+
+# client is your application's model client, with a complete() method.
+rag = RAGPipeline(llm=MyLLM(client))
+```
+
+A custom prompt must accept `{context}` and `{query}`. The default extractive responder also expects `Context:` and `Question:` headings. A custom retriever controls retrieval while the supplied store still handles ingestion; connect it to that same store. Supply either a custom retriever or a graph extension. An injected graph extension must likewise use the pipeline's embedder and store.
+
+## Architecture
+
+```text
+RAGPipeline
+  ├── Processor → chunks and metadata
+  ├── Embedder → Store
+  ├── Retriever → source chunks
+  │     └── optional KnowledgeGraphExtension → expansion and reranking
+  └── LLM → answer with source chunks
+```
+
+`rag/pipeline.py` owns orchestration. `rag/interfaces.py` defines component contracts. `rag/graph.py` provides the optional graph adapter. Existing document, embedding, vector store, and language model modules supply implementations.
+
+The older `RAGEngine` and Streamlit/API integrations remain available through their existing modules. They have not been migrated to the new pipeline API; their legacy search-mode controls and graph UI are separate from this interface.
+
+## Installation extras
+
+| Extra | Purpose |
+| --- | --- |
+| `rag` | Default embedding and FAISS implementations |
+| `documents` | PDF and DOCX extraction |
+| `graph` | Entity extraction and graph retrieval |
+| `neo4j` | Existing Neo4j persistence integration |
+| `ui` | Streamlit and plotting dependencies |
+| `api` | FastAPI, Uvicorn, and multipart uploads |
+
+`pip install -e .` installs only the base dependencies for applications supplying their own components. `requirements.txt` retains the legacy application dependency list.
+
+## Current limits
+
+- Pipeline data is in memory unless the application manages persistence through its store. Passing a populated store does not automatically rebuild a graph.
+- Vector insertion happens before graph extraction. A graph extraction error is raised, but already inserted chunks remain in the store. Ingestion is not transactional or deduplicated.
+- Metadata filtering may scan the full vector index to preserve matching results.
+- There is no conversation memory or token-budget management.
+- Legacy Streamlit and API applications require further integration work before production use.
+
+Runnable examples are in `examples/basic_rag.py` and `examples/graph_rag.py` after installing the project.

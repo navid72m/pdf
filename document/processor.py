@@ -179,9 +179,10 @@ class DocumentProcessor:
         
         # Create chunk-specific metadata
         chunk_metadata = []
+        document_id = base_metadata.get("document_id") or str(uuid.uuid4())
         for i, chunk in enumerate(chunks):
             # Create unique ID for document chunk
-            doc_id = str(uuid.uuid4())
+            doc_id = document_id
             
             # Create metadata with document info and chunk position
             metadata_item = {
@@ -453,10 +454,14 @@ class DocumentProcessor:
                 return []
                 
         paragraphs = []
+        pending = []
         last_pos = 0
         
         for pos in split_points:
             paragraph = text[last_pos:pos].strip()
+            if pending:
+                paragraph = " ".join(pending + [paragraph]).strip()
+                pending = []
             if paragraph and len(paragraph) >= min_chunk_size:
                 paragraphs.append(paragraph)
             elif paragraph and paragraphs and len(paragraphs[-1]) + len(paragraph) <= self.chunk_size:
@@ -464,18 +469,18 @@ class DocumentProcessor:
                 paragraphs[-1] = paragraphs[-1] + " " + paragraph
             elif paragraph:
                 # Keep track of small paragraphs that we might want to combine later
-                if not hasattr(self, '_small_paras'):
-                    self._small_paras = []
-                self._small_paras.append(paragraph)
+                pending.append(paragraph)
                 
             last_pos = pos + 1
         
         # Don't forget the last paragraph
-        last_paragraph = text[last_pos:].strip()
+        last_paragraph = " ".join(pending + [text[last_pos:].strip()]).strip()
         if last_paragraph and len(last_paragraph) >= min_chunk_size:
             paragraphs.append(last_paragraph)
         elif last_paragraph and paragraphs:
             paragraphs[-1] = paragraphs[-1] + " " + last_paragraph
+        elif last_paragraph:
+            paragraphs.append(last_paragraph)
         
         logger.info(f"Found {len(paragraphs)} paragraphs after boundary detection")
         
@@ -679,7 +684,7 @@ class DocumentProcessor:
         text = self._preprocess_text(text)
         
         # For summary tasks with small documents, use the whole document
-        if self.is_summary_mode and len(text) <= self.max_single_chunk_size:
+        if self.is_summary_task and len(text) <= self.max_single_chunk_size:
             logger.info(f"Summary task with small document ({len(text)} chars), using whole document")
             chunks = [text]
         # For small documents, also consider using the whole document
@@ -712,12 +717,13 @@ class DocumentProcessor:
         
         # Create chunk-specific metadata
         chunk_metadata = []
+        document_id = base_metadata.get("document_id") or str(uuid.uuid4())
         for i, chunk in enumerate(chunks):
             metadata_item = {
                 **base_metadata,
                 "chunk_id": i,
                 "total_chunks": len(chunks),
-                "document_id": str(uuid.uuid4()),
+                "document_id": document_id,
                 "chunk_position": f"{i+1}/{len(chunks)}",
                 "chunk_size_chars": len(chunk),
                 "chunk_size_words": len(chunk.split())
